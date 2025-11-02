@@ -1,0 +1,251 @@
+--// Services
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+
+--// Rayfield Loader
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+--// Window Setup
+local Window = Rayfield:CreateWindow({
+    Name = "Rifts Viewer",
+    LoadingTitle = "Rift Scanner",
+    LoadingSubtitle = "by ChatGPT + Enhanced",
+    ConfigurationSaving = { Enabled = false }
+})
+
+--// Tab + UI
+local RiftTab = Window:CreateTab("Rifts")
+local RiftSection = RiftTab:CreateSection("Active Rifts")
+
+--// --- SCRIPT VARIABLES ---
+local autoTPEnabled = false
+local currentTargetRift = nil
+local teleportDistanceThreshold = 5
+local prioritizedRifts = {}
+local RiftLabels = {}
+
+--// Rift Name Mapping
+local RiftNameMap = {
+    ["event-1"] = "Pumpkin Egg",
+    ["event-2"] = "Costume Egg",
+    ["event-3"] = "Sinister Egg",
+    ["event-4"] = "Mutant Egg",
+    ["event-5"] = "Puppet Egg"
+}
+
+-- Build dropdown options
+local priorityOptions = {}
+for _, friendlyName in pairs(RiftNameMap) do
+    table.insert(priorityOptions, friendlyName)
+end
+
+--// --- UI ---
+RiftTab:CreateToggle({
+    Name = "Auto TP to Rift",
+    CurrentValue = false,
+    Flag = "AutoTP",
+    Callback = function(val)
+        autoTPEnabled = val
+        if not autoTPEnabled then
+            currentTargetRift = nil
+        end
+    end
+})
+
+RiftTab:CreateDropdown({
+    Name = "Prioritize Rifts",
+    Options = priorityOptions,
+    CurrentOption = {},
+    MultipleOptions = true,
+    Flag = "PriorityDropdownMulti",
+    Callback = function(selectedOptions)
+        prioritizedRifts = selectedOptions
+    end,
+})
+
+local CurrentTargetLabel = RiftTab:CreateLabel("Current Target: None")
+
+--// --- FIXED LUCK READER ---
+local function getLuckFromRift(rift)
+    if not rift or not rift.Parent then return nil end
+    local luckObj = rift:FindFirstChild("Display")
+                     and rift.Display:FindFirstChild("SurfaceGui")
+                     and rift.Display.SurfaceGui:FindFirstChild("Icon")
+                     and rift.Display.SurfaceGui.Icon:FindFirstChild("Luck")
+    if not luckObj then return nil end
+
+    if luckObj:IsA("TextLabel") then
+        local text = luckObj.Text:gsub("[^%d%.]", "") -- strip non-numeric
+        return tonumber(text) or 0
+    elseif luckObj:IsA("NumberValue") then
+        return luckObj.Value
+    elseif luckObj:IsA("StringValue") then
+        return tonumber(luckObj.Value) or 0
+    end
+    return 0
+end
+
+-- Get Rift Spawn CFrame
+local function getRiftSpawnCFrame(rift)
+    if not rift or not rift.Parent then return nil end
+    local spawn = rift:FindFirstChild("EggPlatformSpawn")
+    if not spawn then return nil end
+
+    if spawn:IsA("BasePart") then
+        return spawn.CFrame
+    elseif spawn:IsA("Model") then
+        if spawn.PrimaryPart then
+            return spawn.PrimaryPart.CFrame
+        else
+            local firstPart = spawn:FindFirstChildWhichIsA("BasePart", true)
+            if firstPart then return firstPart.CFrame end
+        end
+    end
+    return nil
+end
+
+-- Teleport to Rift
+local function teleportToRift(rift)
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+    local targetCF = getRiftSpawnCFrame(rift)
+    if targetCF then
+        root.CFrame = targetCF + Vector3.new(0, 3, 0)
+        return true
+    end
+    return false
+end
+
+local function isRiftStillAlive(rift)
+    return rift and rift.Parent and rift.Parent.Parent
+end
+
+--// --- MAIN REFRESH LOOP ---
+local function refreshRifts()
+    local riftsFolder = Workspace:FindFirstChild("Rendered") and Workspace.Rendered:FindFirstChild("Rifts")
+    
+    if not riftsFolder then
+        if currentTargetRift then
+            currentTargetRift = nil
+            CurrentTargetLabel:Set("Current Target: None")
+        end
+        return
+    end
+
+    local bestLuckOverall   = -math.huge
+    local bestRiftOverall   = nil
+    local bestPriorityLuck  = -math.huge
+    local bestPriorityRift  = nil
+
+    for _, rift in ipairs(riftsFolder:GetChildren()) do
+        local luck = getLuckFromRift(rift)
+        local luckNum = luck or 0
+        local originalName = rift.Name
+        local displayName = RiftNameMap[originalName] or originalName
+
+        -- Update/Create GUI
+        if not RiftLabels[originalName] then
+            RiftLabels[originalName] = {
+                label = RiftTab:CreateLabel("Loading " .. displayName .. " | Luck: " .. luckNum),
+                model = rift
+            }
+            RiftTab:CreateButton({
+                Name = "Teleport to " .. displayName,
+                Callback = function()
+                    teleportToRift(rift)
+                end
+            })
+        else
+            RiftLabels[originalName].label:Set("Active " .. displayName .. " | Luck: " .. luckNum .. "x")
+        end
+
+        -- Track best overall
+        if luckNum > bestLuckOverall then
+            bestLuckOverall = luckNum
+            bestRiftOverall = rift
+        end
+
+        -- Track best prioritized
+        for _, priName in ipairs(prioritizedRifts) do
+            if displayName == priName and luckNum > bestPriorityLuck then
+                bestPriorityLuck = luckNum
+                bestPriorityRift = rift
+            end
+        end
+    end
+
+    -- Clean up dead rifts
+    for name, info in pairs(RiftLabels) do
+        if not riftsFolder:FindFirstChild(name) then
+            RiftLabels[name] = nil
+        end
+    end
+
+    if not autoTPEnabled then
+        CurrentTargetLabel:Set("Current Target: (Auto TP Disabled)")
+        return
+    end
+
+    -- TARGET LOCK LOGIC
+    local finalTarget = nil
+
+    if currentTargetRift and isRiftStillAlive(currentTargetRift) then
+        local currentLuck = getLuckFromRift(currentTargetRift) or 0
+        local candidateRift = (#prioritizedRifts > 0 and bestPriorityRift) or bestRiftOverall
+        local candidateLuck = candidateRift and (getLuckFromRift(candidateRift) or 0) or -math.huge
+
+        if candidateLuck > currentLuck then
+            finalTarget = candidateRift
+        else
+            finalTarget = currentTargetRift
+        end
+    else
+        if #prioritizedRifts > 0 and bestPriorityRift then
+            finalTarget = bestPriorityRift
+        elseif bestRiftOverall then
+            finalTarget = bestRiftOverall
+        end
+    end
+
+    if not finalTarget then
+        currentTargetRift = nil
+        CurrentTargetLabel:Set("Current Target: None")
+        return
+    end
+
+    if currentTargetRift ~= finalTarget then
+        currentTargetRift = finalTarget
+    end
+
+    local displayName = RiftNameMap[finalTarget.Name] or finalTarget.Name
+    local luckVal = getLuckFromRift(finalTarget) or "?"
+
+    CurrentTargetLabel:Set("Current Target: " .. displayName .. " (" .. luckVal .. "x Luck)")
+
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local targetCF = getRiftSpawnCFrame(finalTarget)
+    if not targetCF then return end
+
+    local distance = (root.Position - targetCF.Position).Magnitude
+    if distance > teleportDistanceThreshold then
+        teleportToRift(finalTarget)
+    end
+end
+
+--// Continuous Update Loop
+task.spawn(function()
+    while task.wait(0.5) do
+        pcall(refreshRifts)
+    end
+end)
+
+-- Handle respawn
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    task.wait(1)
+end)
