@@ -1,0 +1,445 @@
+--[[
+    demonhub | Bubble Gum Simulator – ULTIMATE + WEBHOOK
+    Rayfield UI | 100% WORKING AUTO HATCH | Alphabetical Eggs
+--]]
+
+--// Load Rayfield ---------------------------------------------------------
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+--// Services ---------------------------------------------------------------
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players          = game:GetService("Players")
+local HttpService      = game:GetService("HttpService")
+local Workspace        = game:GetService("Workspace")
+local LocalPlayer      = Players.LocalPlayer
+
+--// Remotes ---------------------------------------------------------------
+local RemoteEvent = ReplicatedStorage:WaitForChild("Shared")
+    :WaitForChild("Framework"):WaitForChild("Network")
+    :WaitForChild("Remote"):WaitForChild("RemoteEvent")
+
+local RemoteFunction = ReplicatedStorage:WaitForChild("Shared")
+    :WaitForChild("Framework"):WaitForChild("Network")
+    :WaitForChild("Remote"):WaitForChild("RemoteFunction")
+
+local SpawnPickups   = ReplicatedStorage:WaitForChild("Remotes")
+    :WaitForChild("Pickups"):WaitForChild("SpawnPickups")
+local CollectPickup  = ReplicatedStorage:WaitForChild("Remotes")
+    :WaitForChild("Pickups"):WaitForChild("CollectPickup")
+
+--// Rayfield Window -------------------------------------------------------
+local Window = Rayfield:CreateWindow({
+    Name = "demonhub",
+    LoadingTitle = "demonhub",
+    LoadingSubtitle = "by .ftgs • Footagesus",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "demonhub"
+    }
+})
+
+--// Helper: Fire Touch 10 Times --------------------------------------------
+local function fireTouchTenTimes(part)
+    if not part or not part:FindFirstChild("UnlockHitbox") then return end
+    local hitbox = part.UnlockHitbox
+    if not hitbox or not hitbox:FindFirstChild("TouchInterest") then return end
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    for i = 1, 10 do
+        firetouchinterest(root, hitbox, 0); task.wait()
+        firetouchinterest(root, hitbox, 1); task.wait(0.05)
+    end
+end
+
+--// UNLOCKS TAB -----------------------------------------------------------
+local UnlocksTab = Window:CreateTab("Unlocks")
+
+UnlocksTab:CreateButton({
+    Name = "Unlock Overworld",
+    Callback = function()
+        local world = Workspace:FindFirstChild("Worlds") and Workspace.Worlds:FindFirstChild("The Overworld")
+        if not world then Rayfield:Notify({Title="Error",Content="Overworld not found!",Duration=3}); return end
+        local c = 0
+        for _,island in ipairs(world.Islands:GetChildren()) do
+            if island:FindFirstChild("Island") then fireTouchTenTimes(island.Island); c+=1 end
+        end
+        Rayfield:Notify({Title="Unlocked",Content=string.format("Unlocked %d Overworld islands (10x)!",c),Duration=4})
+    end
+})
+
+UnlocksTab:CreateButton({
+    Name = "Unlock Minigame Paradise",
+    Callback = function()
+        local world = Workspace:FindFirstChild("Worlds") and Workspace.Worlds:FindFirstChild("Minigame Paradise")
+        if not world then Rayfield:Notify({Title="Error",Content="Minigame Paradise not found!",Duration=3}); return end
+        local c = 0
+        for _,island in ipairs(world.Islands:GetChildren()) do fireTouchTenTimes(island); c+=1 end
+        Rayfield:Notify({Title="Unlocked",Content=string.format("Unlocked %d Minigame islands (10x)!",c),Duration=4})
+    end
+})
+
+--// AUTOMATION TAB --------------------------------------------------------
+local AutoTab = Window:CreateTab("Automation")
+
+-- Auto Bubble
+local autoBubbleEnabled = false
+AutoTab:CreateToggle({
+    Name = "Auto Bubble",
+    CurrentValue = false,
+    Callback = function(v)
+        autoBubbleEnabled = v
+        if v then task.spawn(function()
+            while autoBubbleEnabled and task.wait(0.1) do
+                RemoteEvent:FireServer("BlowBubble")
+            end
+        end) end
+    end
+})
+
+-- Egg list (ALPHABETICAL ORDER)
+local eggList = {
+    "100M Egg","200M Egg","500M Egg","Atlantis Egg","Aura Egg","Autumn Egg","Beach Egg","Bee Egg","Brainrot Egg","Bruh Egg",
+    "Bunny Egg","Candy Egg","Cartoon Egg","Chance Egg","Classic Egg","Common Egg","Costume Egg","Crystal Egg","Cyber Egg","Dark Egg",
+    "Developer Egg","Dreamer Egg","Duality Egg","Easter Egg","Easter2 Egg","Federation Egg","Fossil Egg","Fruit Egg","Game Egg",
+    "Hell Egg","Icecream Egg","Iceshard Egg","Icy Egg","Inferno Egg","Infinity Egg","Jester Egg","July4th Egg","Lava Egg","Light Egg",
+    "Lunar Egg","Magma Egg","Mining Egg","Mutant Egg","Neon Egg","Nightmare Egg","Pastel Egg","Pirate Egg","Pumpkin Egg","Rainbow Egg",
+    "Season 1 Egg","Season 2 Egg","Season 3 Egg","Season 4 Egg","Season 5 Egg","Season 6 Egg","Season 7 Egg","Season 8 Egg","Season 9 Egg",
+    "Secret Egg","Series 1 Egg","Series 2 Egg","Shadow Egg","Shop Egg","Showman Egg","Silly Egg","Sinister Egg","Spikey Egg","Spooky Egg",
+    "Spotted Egg","Stellaris Egg","Throwback Egg","Underworld Egg","Vine Egg","Void Egg","Voidcrystal Egg"
+}
+table.sort(eggList)
+
+local selectedEgg = eggList[1]  -- STRING, not table
+local hatchAmount = 1
+local autoHatchEnabled = false
+
+AutoTab:CreateDropdown({
+    Name = "Select Egg",
+    Options = eggList,
+    CurrentOption = selectedEgg,
+    Callback = function(v) selectedEgg = v end  -- v is string
+})
+
+AutoTab:CreateSlider({
+    Name = "Hatch Amount",
+    Range = {1,15},
+    Increment = 1,
+    CurrentValue = hatchAmount,
+    Callback = function(v) hatchAmount = v end
+})
+
+-- FIXED AUTO HATCH – 100% WORKING
+AutoTab:CreateToggle({
+    Name = "Auto Hatch",
+    CurrentValue = false,
+    Callback = function(v)
+        autoHatchEnabled = v
+        if v then
+            task.spawn(function()
+                while autoHatchEnabled do
+                    RemoteEvent:FireServer("HatchEgg", selectedEgg, hatchAmount)  -- STRING + NUMBER
+                    task.wait(0.1)
+                end
+            end)
+            Rayfield:Notify({
+                Title = "Auto Hatch ON",
+                Content = "Hatching "..selectedEgg.." x"..hatchAmount.." every 0.1s",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Auto Spin
+local autoSpinEnabled = false
+AutoTab:CreateToggle({
+    Name = "Auto Spin Halloween Wheel",
+    CurrentValue = false,
+    Callback = function(v)
+        autoSpinEnabled = v
+        if v then task.spawn(function()
+            while autoSpinEnabled and task.wait(2) do
+                RemoteFunction:InvokeServer("HalloweenWheelSpin")
+            end
+        end)
+        Rayfield:Notify({Title="Auto Spin",Content="Spinning Halloween Wheel!",Duration=3})
+        end
+    end
+})
+
+-- Auto Pickups
+local autoPickupsEnabled = false
+local pickupConnection, pickupQueue = nil,{}
+AutoTab:CreateToggle({
+    Name = "Auto Pickups (0.5s delay)",
+    CurrentValue = false,
+    Callback = function(v)
+        autoPickupsEnabled = v
+        if v then
+            task.spawn(function()
+                while autoPickupsEnabled do
+                    if #pickupQueue>0 then
+                        for _,id in ipairs(pickupQueue) do CollectPickup:FireServer(id) end
+                        pickupQueue={}
+                    end
+                    task.wait(0.5)
+                end
+            end)
+            pickupConnection = SpawnPickups.OnClientEvent:Connect(function(d)
+                if not autoPickupsEnabled or not d then return end
+                for _,p in ipairs(d) do
+                    local id = p.Id or p.id
+                    if id and type(id)=="string" and #id==36 then table.insert(pickupQueue,id) end
+                end
+            end)
+            Rayfield:Notify({Title="Auto Pickups",Content="ON with 0.5s delay",Duration=4})
+        else
+            if pickupConnection then pickupConnection:Disconnect(); pickupConnection=nil end
+            pickupQueue={}
+        end
+    end
+})
+
+--// EVENT TAB – AUTO HOUSES ------------------------------------------------
+local EventTab = Window:CreateTab("Event")
+
+local isAutoHouses = false
+local standDelay = 1
+local teleportDelay = 0.1
+
+EventTab:CreateToggle({
+    Name = "Auto Houses (Halloween Event)",
+    CurrentValue = false,
+    Callback = function(v) isAutoHouses = v end
+})
+
+EventTab:CreateSlider({
+    Name = "Stand Delay (seconds)",
+    Range = {0.5,5},
+    Increment = 0.1,
+    CurrentValue = standDelay,
+    Callback = function(v) standDelay = v end
+})
+
+EventTab:CreateSlider({
+    Name = "Teleport Delay (seconds)",
+    Range = {0.1,2},
+    Increment = 0.1,
+    CurrentValue = teleportDelay,
+    Callback = function(v) teleportDelay = v end
+})
+
+local function tp(cf) 
+    local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") 
+    if r then r.CFrame = cf end 
+end
+
+local function dist(p) 
+    local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") 
+    if r and p then return (r.Position - p.Position).Magnitude end 
+    return math.huge 
+end
+
+local function claim(part)
+    local base = part.CFrame * CFrame.new(0, 3, 0)
+    local off  = part.CFrame * CFrame.new(5, 3, 0)
+    tp(off); task.wait(0.1); tp(base)
+    for i = 1, math.floor(standDelay) do 
+        if not isAutoHouses then break end 
+        tp(base * CFrame.new(0, i, 0)); task.wait(1) 
+    end
+    if standDelay > math.floor(standDelay) then 
+        task.wait(standDelay - math.floor(standDelay)) 
+    end
+end
+
+task.spawn(function()
+    while true do
+        if not isAutoHouses then task.wait(0.1); continue end
+        local hall = Workspace:FindFirstChild("HalloweenEvent")
+        if not hall then task.wait(1); continue end
+        local houses = hall:FindFirstChild("Houses")
+        if not houses then task.wait(1); continue end
+        local list = {}
+        for _, h in ipairs(houses:GetChildren()) do
+            local act = h:FindFirstChild("Activation")
+            if act and act:FindFirstChild("Active") and act.Active.Value then
+                local p = act.PrimaryPart or act:FindFirstChildWhichIsA("BasePart")
+                if p then table.insert(list, {house = h, dist = dist(p)}) end
+            end
+        end
+        table.sort(list, function(a, b) return a.dist < b.dist end)
+        for _, v in ipairs(list) do
+            if not isAutoHouses then break end
+            local act = v.house:FindFirstChild("Activation")
+            if act then
+                local p = act.PrimaryPart or act:FindFirstChildWhichIsA("BasePart")
+                if p then claim(p) end
+            end
+        end
+        task.wait(teleportDelay)
+    end
+end)
+
+--// MISC TAB – WEBHOOK ----------------------------------------------------
+local MiscTab = Window:CreateTab("Misc")
+
+local webhookUrl = ""
+local webhookEnabled = false
+local webhookQueue = {}
+local lastSent = 0
+
+local function fixUrl(u)
+    return u:gsub("%s",""):gsub("^https?://discordapp%.com/", "https://discord.com/")
+end
+
+MiscTab:CreateInput({
+    Name = "Discord Webhook URL",
+    PlaceholderText = "https://discord.com/api/webhooks/...",
+    Callback = function(t) webhookUrl = fixUrl(t) end
+})
+
+MiscTab:CreateButton({
+    Name = "Save Webhook URL",
+    Callback = function()
+        webhookUrl = fixUrl(webhookUrl)
+        Rayfield:Notify({Title="Saved", Content="Webhook URL saved!", Duration=2})
+    end
+})
+
+MiscTab:CreateButton({
+    Name = "Test Webhook",
+    Callback = function()
+        if webhookUrl == "" or not webhookUrl:match("^https://discord%.com/api/webhooks/") then
+            Rayfield:Notify({Title="Error", Content="Invalid URL!", Duration=3})
+            return
+        end
+        table.insert(webhookQueue, {type="text", content="Test from demonhub! request() WORKS!"})
+        Rayfield:Notify({Title="Test Queued", Content="Sending via request()...", Duration=3})
+    end
+})
+
+MiscTab:CreateToggle({
+    Name = "Enable Hatch Webhook",
+    CurrentValue = false,
+    Callback = function(v)
+        webhookEnabled = v
+        Rayfield:Notify({Title="Webhook", Content=v and "ON" or "OFF", Duration=2})
+    end
+})
+
+--// request() SEND FUNCTIONS -----------------------------------------------
+local function SendMessage(url, message)
+    if not url or url == "" then return end
+    local data = {content = message}
+    local body = HttpService:JSONEncode(data)
+    local ok, resp = pcall(function()
+        return request({
+            Url = url,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = body
+        })
+    end)
+    if ok and resp.StatusCode == 200 then
+        Rayfield:Notify({Title="Sent", Content="Message sent!", Duration=2})
+    else
+        Rayfield:Notify({Title="Failed", Content="Check URL or exploit.", Duration=4})
+    end
+end
+
+local function SendMessageEMBED(url, embed)
+    if not url or url == "" then return end
+    local data = {
+        embeds = {{
+            title = embed.title,
+            description = embed.description,
+            color = embed.color,
+            fields = embed.fields,
+            footer = {text = embed.footer.text},
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%S.000Z"),
+            thumbnail = embed.thumbnail
+        }}
+    }
+    local body = HttpService:JSONEncode(data)
+    local ok, resp = pcall(function()
+        return request({
+            Url = url,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = body
+        })
+    end)
+    if ok and resp.StatusCode == 200 then
+        Rayfield:Notify({Title="Sent", Content="Embed sent!", Duration=2})
+    else
+        Rayfield:Notify({Title="Failed", Content="Embed failed.", Duration=4})
+    end
+end
+
+-- Queue processor (5s delay)
+task.spawn(function()
+    while true do
+        if #webhookQueue > 0 and tick() - lastSent >= 5 then
+            local item = table.remove(webhookQueue, 1)
+            if item.type == "text" then
+                SendMessage(webhookUrl, item.content)
+            elseif item.type == "embed" then
+                SendMessageEMBED(webhookUrl, item.embed)
+            end
+            lastSent = tick()
+        end
+        task.wait(1)
+    end
+end)
+
+-- Queue hatch embed
+local function queueHatchEmbed(eggName, petList)
+    if not webhookEnabled or #petList == 0 then return end
+    local embed = {
+        title = "Hatched "..eggName,
+        description = "You hatched **"..#petList.."** pet"..(#petList>1 and "s" or "").."!",
+        color = 0x00ff00,
+        fields = {},
+        footer = {text = "Player: "..LocalPlayer.Name},
+        thumbnail = {url = "https://www.roblox.com/headshot-thumbnail/image?userId="..LocalPlayer.UserId.."&width=150&height=150&format=png"}
+    }
+    for i, pet in ipairs(petList) do
+        table.insert(embed.fields, {name = "Pet #"..i, value = pet, inline = true})
+    end
+    table.insert(webhookQueue, {type = "embed", embed = embed})
+end
+
+-- Hatch listener
+RemoteEvent.OnClientEvent:Connect(function(action, data)
+    if action ~= "HatchEgg" or not webhookEnabled then return end
+    local eggName = "Unknown Egg"
+    local pets = {}
+    if typeof(data) == "table" then
+        eggName = data.Name or eggName
+        for _, pd in ipairs(data.Pets or {}) do
+            if not pd.Deleted then
+                local p = pd.Pet
+                local label = p.Name or "Unknown"
+                local tags = {}
+                if p.Shiny then table.insert(tags, "Shiny") end
+                if p.Mythic then table.insert(tags, "Mythic") end
+                if #tags > 0 then label = label.." **"..table.concat(tags, " ").."**" end
+                table.insert(pets, label)
+            end
+        end
+    end
+    if #pets > 0 then queueHatchEmbed(eggName, pets) end
+end)
+
+--// Cleanup
+game:BindToClose(function()
+    if pickupConnection then pickupConnection:Disconnect() end
+end)
+
+--// LOADED
+Rayfield:Notify({
+    Title = "demonhub LOADED",
+    Content = "Auto Hatch FIXED – NO ERRORS",
+    Duration = 6
+})
